@@ -1,9 +1,9 @@
-local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/1nig1htmare1234/SCRIPTS/refs/heads/main/Orion.lua')))()
 local Window = OrionLib:MakeWindow({
-	Name = "Mobile Fly",
-	HidePremium = false,
-	SaveConfig = false,
-	IntroText = "Premium Hub | V1.1 - by nytheron"
+        Name = "MOBILEFLY//DEV - Version//V1.1",
+        HidePremium = false,
+        SaveConfig = false,
+        IntroText = "FLY Mobile | V1.1 - by nytheron"
 })
 
 local VehicleTab = Window:MakeTab({
@@ -12,165 +12,395 @@ local VehicleTab = Window:MakeTab({
 	PremiumOnly = false
 })
 
--- Variablen
+-- // Variables \\ --
+
+local boostAmount = 0
 local player = game.Players.LocalPlayer
-local camera = workspace.CurrentCamera
-local runService = game:GetService("RunService")
-local userInputService = game:GetService("UserInputService")
-local PlayerGui = player:WaitForChild("PlayerGui")
-
-local flying = false
-local flightConnection
-local flightSpeed = 60
-local flightAcceleration = 10
-local currentVelocity = Vector3.zero
-
+local LocalPlayer = game.Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 local character = player.Character or player.CharacterAdded:Wait()
-local hrp = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local RunService = game:GetService("RunService")
+local noclipEnabled = false
+local noclipConnection
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local FlightSpeed = 100
+local FlightAcceleration = 11
+local SpeedKey = Enum.KeyCode.LeftControl
+local SpeedKeyMultiplier = 13
+local Flying = false
+local FlightConnection = nil
+local UserCharacter = nil
+local UserRootPart = nil
+local CurrentVelocity = Vector3.zero
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 
--- Compact, draggable Mobile Fly UI
-local gui = Instance.new("ScreenGui")
-gui.Name = "MobileFlyUI"
-gui.Parent = PlayerGui
-gui.ResetOnSpawn = false
-gui.Enabled = false
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 160, 0, 130)
-frame.Position = UDim2.new(0.7, 0, 0.6, 0)
-frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-frame.BackgroundTransparency = 0.2
-frame.Active = true
+-- // Vehicle Tab \\ --
 
--- Drag functionality
-local dragging, dragInput, dragStart, startPos
-frame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = frame.Position
-
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-frame.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
-end)
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		local delta = input.Position - dragStart
-		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
-end)
-
-frame.Parent = gui
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(1, 0, 0, 30)
-toggleButton.Position = UDim2.new(0, 0, 0, 0)
-toggleButton.Text = "🚀 Fly: OFF"
-toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Parent = frame
-
-local directions = {
-	{Symbol = "↑", Vector = Vector3.new(0, 0, -1), Pos = UDim2.new(0.5, -20, 0, 35)},
-	{Symbol = "↓", Vector = Vector3.new(0, 0, 1), Pos = UDim2.new(0.5, -20, 0, 70)},
-	{Symbol = "←", Vector = Vector3.new(-1, 0, 0), Pos = UDim2.new(0, 10, 0, 52)},
-	{Symbol = "→", Vector = Vector3.new(1, 0, 0), Pos = UDim2.new(1, -50, 0, 52)},
-	{Symbol = "⎵", Vector = Vector3.new(0, 1, 0), Pos = UDim2.new(0, 10, 0, 95)},
-	{Symbol = "⇧", Vector = Vector3.new(0, -1, 0), Pos = UDim2.new(1, -50, 0, 95)},
-}
-
-local moving = {}
-
-for _, dir in ipairs(directions) do
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 40, 0, 30)
-	btn.Position = dir.Pos
-	btn.Text = dir.Symbol
-	btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	btn.Parent = frame
-
-	btn.MouseButton1Down:Connect(function()
-		moving[dir.Symbol] = true
-	end)
-	btn.MouseButton1Up:Connect(function()
-		moving[dir.Symbol] = false
-	end)
-	btn.TouchTap:Connect(function()
-		moving[dir.Symbol] = true
-		wait(0.15)
-		moving[dir.Symbol] = false
-	end)
+local function setCharacter(character)
+	UserCharacter = character
+	UserRootPart = character:WaitForChild("HumanoidRootPart")
 end
 
-local function startFly()
-	if flying then return end
-	flying = true
-	toggleButton.Text = "🚀 Fly: ON"
-
-	flightConnection = runService.RenderStepped:Connect(function(delta)
-		local baseVelocity = Vector3.zero
-		local camCF = camera.CFrame
-
-		if moving["↑"] then baseVelocity += camCF.LookVector * flightSpeed end
-		if moving["↓"] then baseVelocity -= camCF.LookVector * flightSpeed end
-		if moving["←"] then baseVelocity -= camCF.RightVector * flightSpeed end
-		if moving["→"] then baseVelocity += camCF.RightVector * flightSpeed end
-		if moving["⎵"] then baseVelocity += Vector3.yAxis * flightSpeed end
-		if moving["⇧"] then baseVelocity -= Vector3.yAxis * flightSpeed end
-
-		currentVelocity = currentVelocity:Lerp(baseVelocity, math.clamp(delta * flightAcceleration, 0, 1))
-		hrp.Velocity = currentVelocity + Vector3.new(0, 2, 0)
-	end)
+LocalPlayer.CharacterAdded:Connect(setCharacter)
+if LocalPlayer.Character then
+	setCharacter(LocalPlayer.Character)
 end
 
-local function stopFly()
-	if not flying then return end
-	flying = false
-	toggleButton.Text = "🚀 Fly: OFF"
-	if flightConnection then
-		flightConnection:Disconnect()
-		flightConnection = nil
+local function Flight(delta)
+	local BaseVelocity = Vector3.zero
+	if not UserInputService:GetFocusedTextBox() then
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+			BaseVelocity += Camera.CFrame.LookVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+			BaseVelocity -= Camera.CFrame.LookVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+			BaseVelocity -= Camera.CFrame.RightVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+			BaseVelocity += Camera.CFrame.RightVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+			BaseVelocity += Vector3.yAxis * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+			BaseVelocity -= Vector3.yAxis * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(SpeedKey) then
+			BaseVelocity *= SpeedKeyMultiplier
+		end
+	end
+
+	if UserRootPart and not UserRootPart.Anchored then
+		CurrentVelocity = CurrentVelocity:Lerp(BaseVelocity, math.clamp(delta * FlightAcceleration, 0, 1))
+		UserRootPart.Velocity = CurrentVelocity + Vector3.new(0, 2, 0)
+		UserRootPart.CFrame = CFrame.lookAt(UserRootPart.Position, UserRootPart.Position + Camera.CFrame.LookVector)
 	end
 end
 
-toggleButton.MouseButton1Click:Connect(function()
-	if flying then
-		stopFly()
+local function ToggleFlight(enable)
+	if enable then
+		Flying = true
+		FlightConnection = RunService.RenderStepped:Connect(Flight)
 	else
-		startFly()
+		Flying = false
+		if FlightConnection then
+			FlightConnection:Disconnect()
+			FlightConnection = nil
+		end
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if not gameProcessed and input.KeyCode == Enum.KeyCode.X then
+		ToggleFlight(not Flying)
 	end
 end)
-
--- Toggle UI via Orion
+VehicleTab:AddLabel("Fly Kebind: X")
 VehicleTab:AddToggle({
-	Name = "Show Mobile Fly UI",
+	Name = "CarFly",
 	Default = false,
 	Callback = function(Value)
-		gui.Enabled = Value
-	end
+    ToggleFlight(Value)
+	end    
 })
+
+VehicleTab:AddToggle({
+    Name = "Mobile CarFly",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            local Players = game:GetService("Players")
+            local RunService = game:GetService("RunService")
+            local Camera = workspace.CurrentCamera
+
+            local LocalPlayer = Players.LocalPlayer
+            local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+            -- UI erstellen
+            local gui = Instance.new("ScreenGui")
+            gui.Name = "MobileFlyUI"
+            gui.Parent = PlayerGui
+            gui.ResetOnSpawn = false
+
+            local frame = Instance.new("Frame")
+            frame.Size = UDim2.new(0, 200, 0, 120)
+            frame.Position = UDim2.new(0.5, -100, 0.7, 0)
+            frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+            frame.BackgroundTransparency = 0.1
+            frame.BorderSizePixel = 0
+            frame.Active = true
+            frame.Draggable = true
+            frame.AnchorPoint = Vector2.new(0.5, 0)
+            frame.Parent = gui
+
+            local UICorner = Instance.new("UICorner", frame)
+            UICorner.CornerRadius = UDim.new(0, 8)
+
+            local toggle = Instance.new("TextButton")
+            toggle.Size = UDim2.new(0.9, 0, 0, 40)
+            toggle.Position = UDim2.new(0.05, 0, 0, 5)
+            toggle.Text = "CarFly: OFF"
+            toggle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+            toggle.Font = Enum.Font.GothamSemibold
+            toggle.TextSize = 18
+            toggle.AutoButtonColor = false
+            toggle.Parent = frame
+
+            local UICorner2 = Instance.new("UICorner", toggle)
+            UICorner2.CornerRadius = UDim.new(0, 6)
+
+            local forwardBtn = Instance.new("TextButton")
+            forwardBtn.Size = UDim2.new(0.42, 0, 0, 40)
+            forwardBtn.Position = UDim2.new(0.05, 0, 0, 55)
+            forwardBtn.Text = "↑"
+            forwardBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            forwardBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            forwardBtn.Font = Enum.Font.GothamSemibold
+            forwardBtn.TextSize = 16
+            forwardBtn.AutoButtonColor = false
+            forwardBtn.Parent = frame
+
+            local UICorner3 = Instance.new("UICorner", forwardBtn)
+            UICorner3.CornerRadius = UDim.new(0, 6)
+
+            local backwardBtn = Instance.new("TextButton")
+            backwardBtn.Size = UDim2.new(0.42, 0, 0, 40)
+            backwardBtn.Position = UDim2.new(0.53, 0, 0, 55)
+            backwardBtn.Text = "↓"
+            backwardBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            backwardBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            backwardBtn.Font = Enum.Font.GothamSemibold
+            backwardBtn.TextSize = 16
+            backwardBtn.AutoButtonColor = false
+            backwardBtn.Parent = frame
+
+            local function AddHoverEffect(button)
+                button.MouseEnter:Connect(function()
+                    button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+                end)
+                button.MouseLeave:Connect(function()
+                    button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                end)
+            end
+
+            AddHoverEffect(toggle)
+            AddHoverEffect(forwardBtn)
+            AddHoverEffect(backwardBtn)
+
+            -- Fly Variablen
+            local MobileFlying = false
+            local FlightConnection
+            local CurrentVelocity = Vector3.zero
+
+            local movingForward = false
+            local movingBackward = false
+
+            local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            local hrp = character:WaitForChild("HumanoidRootPart")
+
+            local function startFly()
+                if MobileFlying then return end
+                MobileFlying = true
+                toggle.Text = "CarFly: ON"
+
+                FlightConnection = RunService.RenderStepped:Connect(function(delta)
+                    local BaseVelocity = Vector3.zero
+
+                    if movingForward then
+                        BaseVelocity = Camera.CFrame.LookVector * FlightSpeed
+                    elseif movingBackward then
+                        BaseVelocity = -Camera.CFrame.LookVector * FlightSpeed
+                    end
+
+                    CurrentVelocity = CurrentVelocity:Lerp(BaseVelocity, math.clamp(delta * FlightAcceleration, 0, 1))
+                    hrp.Velocity = CurrentVelocity + Vector3.new(0, 2, 0)
+                    hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Camera.CFrame.LookVector)
+                end)
+            end
+
+            local function stopFly()
+                if not MobileFlying then return end
+                MobileFlying = false
+                toggle.Text = "CarFly: OFF"
+                if FlightConnection then
+                    FlightConnection:Disconnect()
+                    FlightConnection = nil
+                end
+            end
+
+            toggle.MouseButton1Click:Connect(function()
+                if MobileFlying then
+                    stopFly()
+                else
+                    startFly()
+                end
+            end)
+
+            forwardBtn.MouseButton1Down:Connect(function()
+                movingForward = true
+            end)
+            forwardBtn.MouseButton1Up:Connect(function()
+                movingForward = false
+            end)
+
+            backwardBtn.MouseButton1Down:Connect(function()
+                movingBackward = true
+            end)
+            backwardBtn.MouseButton1Up:Connect(function()
+                movingBackward = false
+            end)
+
+        else
+            local existingGui = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("MobileFlyUI")
+            if existingGui then
+                existingGui:Destroy()
+            end
+        end
+    end
+})
+
 
 VehicleTab:AddSlider({
 	Name = "Fly Speed",
-	Min = 20,
-	Max = 200,
-	Default = flightSpeed,
-	Color = Color3.fromRGB(255, 255, 255),
-	Increment = 5,
+	Min = 0,
+	Max = 170,
+	Default = FlightSpeed,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 1,
 	ValueName = "Speed",
 	Callback = function(Value)
-		flightSpeed = Value
+            FlightSpeed = Value
+	end    
+})
+
+VehicleTab:AddButton({
+	Name = "CarGod",
+	Callback = function()
+        local vehicleGodMode = true  
+        local lastVehicle = nil
+        
+        
+        local function updateVehicle()
+            if not vehicleGodMode then return end
+            if not lastVehicle or not lastVehicle.Parent then
+                local vehiclesFolder = workspace:FindFirstChild("Vehicles")
+                lastVehicle = vehiclesFolder and vehiclesFolder:FindFirstChild(player.Name) or nil
+            end
+        
+            if lastVehicle then
+                lastVehicle:SetAttribute("IsOn", true)
+                lastVehicle:SetAttribute("currentHealth", 500)
+                lastVehicle:SetAttribute("currentFuel", 45)
+            end
+        end
+        
+        RunService.Heartbeat:Connect(updateVehicle) 
+  	end
+})
+
+VehicleTab:AddTextbox({
+	Name = "NumberPlate Text:",
+	Default = "",
+	TextDisappear = false,
+	Callback = function(inputText)
+        local Vehicle = workspace.Vehicles:FindFirstChild(LocalPlayer.Name)
+
+        if Vehicle and Vehicle:FindFirstChild("Body") then
+            local licensePlates = Vehicle.Body:FindFirstChild("LicensePlates")
+            if licensePlates then
+                for _, side in ipairs({"Front", "Back"}) do
+                    local plate = licensePlates:FindFirstChild(side)
+                    if plate and plate:FindFirstChild("Gui") then
+                        local gui = plate.Gui
+                        if gui:FindFirstChild("TextLabel") then
+                            gui.TextLabel.Text = inputText
+                        else
+                            warn("TextLabel not found in " .. side)
+                        end
+                    else
+                        warn(side .. " license plate GUI not found")
+                    end
+                end
+            else
+                warn("LicensePlates not found")
+            end
+        else
+            warn("Vehicle not found")
+        end
 	end
 })
 
-OrionLib:Init()
+local function ensurePlayerInVehicle()
+    local vehicle = workspace:FindFirstChild("Vehicles") and workspace.Vehicles:FindFirstChild(LocalPlayer.Name)
+
+    if vehicle and character then
+        local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+        local driveSeat = vehicle:FindFirstChild("DriveSeat")
+
+        if humanoid and driveSeat and humanoid.SeatPart ~= driveSeat then
+            driveSeat:Sit(humanoid)
+        end
+    end
+end
+
+VehicleTab:AddButton({
+	Name = "Sit In Vehicle",
+	Callback = function()
+		ensurePlayerInVehicle()
+  	end    
+})
+
+local Section = VehicleTab:AddSection({
+	Name = "Tuner"
+})
+local vehicleFolder = workspace:WaitForChild("Vehicles"):WaitForChild(LocalPlayer.Name)
+
+VehicleTab:AddSlider({
+	Name = "Armor Level",
+	Min = 0,
+	Max = 6,
+	Default = 0,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 1,
+	ValueName = "Level",
+	Callback = function(Value)
+        vehicleFolder:SetAttribute("armorLevel", Value)
+	end    
+})
+
+VehicleTab:AddSlider({
+	Name = "Brakes Level",
+	Min = 0,
+	Max = 6,
+	Default = 0,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 1,
+	ValueName = "Level",
+	Callback = function(Value)
+    vehicleFolder:SetAttribute("brakesLevel", Value)
+	end    
+})
+
+VehicleTab:AddSlider({
+	Name = "Engine Level",
+	Min = 0,
+	Max = 6,
+	Default = 0,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 1,
+	ValueName = "Level",
+	Callback = function(Value)
+vehicleFolder:SetAttribute("engineLevel", Value)
+	end    
+})
+
