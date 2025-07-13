@@ -1,0 +1,164 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/1nig1htmare1234/SCRIPTS/refs/heads/main/Orion.lua')))()
+local Window = OrionLib:MakeWindow({
+        Name = "mobile fly", 
+        HidePremium = false,
+        SaveConfig = false,
+        IntroText = "Premium Hub | V1.1 - by nytheron"
+})
+
+local VehicleTab = Window:MakeTab({
+	Name = "Vehicle",
+	Icon = "rbxassetid://13773422471",
+	PremiumOnly = false
+})
+
+-- // Variables \ --
+
+local player = game.Players.LocalPlayer
+local LocalPlayer = game.Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local FlightSpeed = 100
+local FlightAcceleration = 11
+local SpeedKey = Enum.KeyCode.LeftControl
+local SpeedKeyMultiplier = 13
+local Flying = false
+local FlightConnection = nil
+local UserCharacter = nil
+local UserRootPart = nil
+local CurrentVelocity = Vector3.zero
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local function setCharacter(character)
+	UserCharacter = character
+	UserRootPart = character:WaitForChild("HumanoidRootPart")
+end
+
+LocalPlayer.CharacterAdded:Connect(setCharacter)
+if LocalPlayer.Character then
+	setCharacter(LocalPlayer.Character)
+end
+
+local function Flight(delta)
+	local BaseVelocity = Vector3.zero
+	if not UserInputService:GetFocusedTextBox() then
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+			BaseVelocity += Camera.CFrame.LookVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+			BaseVelocity -= Camera.CFrame.LookVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+			BaseVelocity -= Camera.CFrame.RightVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+			BaseVelocity += Camera.CFrame.RightVector * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+			BaseVelocity += Vector3.yAxis * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+			BaseVelocity -= Vector3.yAxis * FlightSpeed
+		end
+		if UserInputService:IsKeyDown(SpeedKey) then
+			BaseVelocity *= SpeedKeyMultiplier
+		end
+	end
+
+	if UserRootPart and not UserRootPart.Anchored then
+		CurrentVelocity = CurrentVelocity:Lerp(BaseVelocity, math.clamp(delta * FlightAcceleration, 0, 1))
+		UserRootPart.Velocity = CurrentVelocity + Vector3.new(0, 2, 0)
+		UserRootPart.CFrame = CFrame.lookAt(UserRootPart.Position, UserRootPart.Position + Camera.CFrame.LookVector)
+	end
+end
+
+local function ToggleFlight(enable)
+	if enable then
+		Flying = true
+		FlightConnection = RunService.RenderStepped:Connect(Flight)
+	else
+		Flying = false
+		if FlightConnection then
+			FlightConnection:Disconnect()
+			FlightConnection = nil
+		end
+	end
+end
+
+VehicleTab:AddButton({
+	Name = "Toggle Fly (Mobile)",
+	Callback = function()
+		ToggleFlight(not Flying)
+	end    
+})
+
+VehicleTab:AddSlider({
+	Name = "Fly Speed",
+	Min = 0,
+	Max = 170,
+	Default = FlightSpeed,
+	Color = Color3.fromRGB(255,255,255),
+	Increment = 1,
+	ValueName = "Speed",
+	Callback = function(Value)
+		FlightSpeed = Value
+	end    
+})
+
+-- // Mobile Fly UI \ --
+
+local flyUI = Instance.new("ScreenGui")
+flyUI.Name = "MobileFlyUI"
+flyUI.ResetOnSpawn = false
+flyUI.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+flyUI.Enabled = false
+
+local buttonSize = UDim2.new(0, 50, 0, 50)
+local directions = {
+    {Name="↑", Position=UDim2.new(0.5,-25,0.4,0), Key=Enum.KeyCode.W},
+    {Name="↓", Position=UDim2.new(0.5,-25,0.6,0), Key=Enum.KeyCode.S},
+    {Name="←", Position=UDim2.new(0.4,-25,0.5,-25), Key=Enum.KeyCode.A},
+    {Name="→", Position=UDim2.new(0.6,-25,0.5,-25), Key=Enum.KeyCode.D},
+    {Name="⎵", Position=UDim2.new(0.8,-25,0.5,-25), Key=Enum.KeyCode.Space},
+    {Name="⇧", Position=UDim2.new(0.2,-25,0.5,-25), Key=Enum.KeyCode.LeftShift},
+}
+
+for _, dir in ipairs(directions) do
+    local btn = Instance.new("TextButton")
+    btn.Size = buttonSize
+    btn.Position = dir.Position
+    btn.Text = dir.Name
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.BackgroundTransparency = 0.2
+    btn.Parent = flyUI
+
+    btn.MouseButton1Down:Connect(function()
+        local input = Instance.new("InputObject")
+        input.UserInputType = Enum.UserInputType.Keyboard
+        input.KeyCode = dir.Key
+        UserInputService.InputBegan:Fire(input, false)
+    end)
+
+    btn.MouseButton1Up:Connect(function()
+        local input = Instance.new("InputObject")
+        input.UserInputType = Enum.UserInputType.Keyboard
+        input.KeyCode = dir.Key
+        UserInputService.InputEnded:Fire(input, false)
+    end)
+end
+
+VehicleTab:AddToggle({
+	Name = "Show Mobile Fly UI",
+	Default = false,
+	Callback = function(Value)
+		flyUI.Enabled = Value
+	end    
+})
