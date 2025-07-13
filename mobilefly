@@ -1,9 +1,9 @@
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/1nig1htmare1234/SCRIPTS/refs/heads/main/Orion.lua')))()
+local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
 local Window = OrionLib:MakeWindow({
-        Name = "mobile fly", 
-        HidePremium = false,
-        SaveConfig = false,
-        IntroText = "Premium Hub | V1.1 - by nytheron"
+	Name = "Mobile Fly",
+	HidePremium = false,
+	SaveConfig = false,
+	IntroText = "Premium Hub | V1.1 - by nytheron"
 })
 
 local VehicleTab = Window:MakeTab({
@@ -12,232 +12,165 @@ local VehicleTab = Window:MakeTab({
 	PremiumOnly = false
 })
 
--- // Variables \ --
-
+-- Variablen
 local player = game.Players.LocalPlayer
-local LocalPlayer = game.Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
+local camera = workspace.CurrentCamera
+local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
+local PlayerGui = player:WaitForChild("PlayerGui")
+
+local flying = false
+local flightConnection
+local flightSpeed = 60
+local flightAcceleration = 10
+local currentVelocity = Vector3.zero
+
 local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
-local FlightSpeed = 100
-local FlightAcceleration = 11
-local SpeedKey = Enum.KeyCode.LeftControl
-local SpeedKeyMultiplier = 13
-local Flying = false
-local FlightConnection = nil
-local UserCharacter = nil
-local UserRootPart = nil
-local CurrentVelocity = Vector3.zero
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local hrp = character:WaitForChild("HumanoidRootPart")
 
-local function setCharacter(character)
-	UserCharacter = character
-	UserRootPart = character:WaitForChild("HumanoidRootPart")
-end
-
-LocalPlayer.CharacterAdded:Connect(setCharacter)
-if LocalPlayer.Character then
-	setCharacter(LocalPlayer.Character)
-end
-
-local function Flight(delta)
-	local BaseVelocity = Vector3.zero
-	if not UserInputService:GetFocusedTextBox() then
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-			BaseVelocity += Camera.CFrame.LookVector * FlightSpeed
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-			BaseVelocity -= Camera.CFrame.LookVector * FlightSpeed
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-			BaseVelocity -= Camera.CFrame.RightVector * FlightSpeed
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-			BaseVelocity += Camera.CFrame.RightVector * FlightSpeed
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-			BaseVelocity += Vector3.yAxis * FlightSpeed
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-			BaseVelocity -= Vector3.yAxis * FlightSpeed
-		end
-		if UserInputService:IsKeyDown(SpeedKey) then
-			BaseVelocity *= SpeedKeyMultiplier
-		end
-	end
-
-	if UserRootPart and not UserRootPart.Anchored then
-		CurrentVelocity = CurrentVelocity:Lerp(BaseVelocity, math.clamp(delta * FlightAcceleration, 0, 1))
-		UserRootPart.Velocity = CurrentVelocity + Vector3.new(0, 2, 0)
-		UserRootPart.CFrame = CFrame.lookAt(UserRootPart.Position, UserRootPart.Position + Camera.CFrame.LookVector)
-	end
-end
-
-local function ToggleFlight(enable)
-	if enable then
-		Flying = true
-		FlightConnection = RunService.RenderStepped:Connect(Flight)
-	else
-		Flying = false
-		if FlightConnection then
-			FlightConnection:Disconnect()
-			FlightConnection = nil
-		end
-	end
-end
-
-VehicleTab:AddButton({
-	Name = "Toggle Fly (Mobile)",
-	Callback = function()
-		ToggleFlight(not Flying)
-	end    
-})
-
-VehicleTab:AddSlider({
-	Name = "Fly Speed",
-	Min = 0,
-	Max = 170,
-	Default = FlightSpeed,
-	Color = Color3.fromRGB(255,255,255),
-	Increment = 1,
-	ValueName = "Speed",
-	Callback = function(Value)
-		FlightSpeed = Value
-	end    
-})
-
--- // Mobile Fly UI - Kompakt, Dragbar, Steuerung nur per UI \\ --
-
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-
+-- Compact, draggable Mobile Fly UI
 local gui = Instance.new("ScreenGui")
 gui.Name = "MobileFlyUI"
 gui.Parent = PlayerGui
 gui.ResetOnSpawn = false
+gui.Enabled = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 180, 0, 150)
+frame.Size = UDim2.new(0, 160, 0, 130)
 frame.Position = UDim2.new(0.7, 0, 0.6, 0)
 frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 frame.BackgroundTransparency = 0.2
 frame.Active = true
-frame.Draggable = true
+
+-- Drag functionality
+local dragging, dragInput, dragStart, startPos
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+frame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
 frame.Parent = gui
 
-local toggle = Instance.new("TextButton")
-toggle.Size = UDim2.new(1, 0, 0, 30)
-toggle.Position = UDim2.new(0, 0, 0, 0)
-toggle.Text = "🚀 Fly: OFF"
-toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggle.Parent = frame
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(1, 0, 0, 30)
+toggleButton.Position = UDim2.new(0, 0, 0, 0)
+toggleButton.Text = "🚀 Fly: OFF"
+toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Parent = frame
 
 local directions = {
-	{Name = "↑", Vector = Vector3.new(0, 0, -1), Pos = UDim2.new(0.5, -25, 0, 40)},
-	{Name = "↓", Vector = Vector3.new(0, 0, 1), Pos = UDim2.new(0.5, -25, 0, 90)},
-	{Name = "←", Vector = Vector3.new(-1, 0, 0), Pos = UDim2.new(0, 15, 0, 65)},
-	{Name = "→", Vector = Vector3.new(1, 0, 0), Pos = UDim2.new(1, -65, 0, 65)},
-	{Name = "⎵", Vector = Vector3.new(0, 1, 0), Pos = UDim2.new(0, 15, 0, 115)},
-	{Name = "⇧", Vector = Vector3.new(0, -1, 0), Pos = UDim2.new(1, -65, 0, 115)},
+	{Symbol = "↑", Vector = Vector3.new(0, 0, -1), Pos = UDim2.new(0.5, -20, 0, 35)},
+	{Symbol = "↓", Vector = Vector3.new(0, 0, 1), Pos = UDim2.new(0.5, -20, 0, 70)},
+	{Symbol = "←", Vector = Vector3.new(-1, 0, 0), Pos = UDim2.new(0, 10, 0, 52)},
+	{Symbol = "→", Vector = Vector3.new(1, 0, 0), Pos = UDim2.new(1, -50, 0, 52)},
+	{Symbol = "⎵", Vector = Vector3.new(0, 1, 0), Pos = UDim2.new(0, 10, 0, 95)},
+	{Symbol = "⇧", Vector = Vector3.new(0, -1, 0), Pos = UDim2.new(1, -50, 0, 95)},
 }
 
 local moving = {}
 
 for _, dir in ipairs(directions) do
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 50, 0, 30)
+	btn.Size = UDim2.new(0, 40, 0, 30)
 	btn.Position = dir.Pos
-	btn.Text = dir.Name
+	btn.Text = dir.Symbol
 	btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Parent = frame
 
 	btn.MouseButton1Down:Connect(function()
-		moving[dir.Name] = true
+		moving[dir.Symbol] = true
 	end)
 	btn.MouseButton1Up:Connect(function()
-		moving[dir.Name] = false
+		moving[dir.Symbol] = false
 	end)
 	btn.TouchTap:Connect(function()
-		moving[dir.Name] = not moving[dir.Name]
-		wait(0.2)
-		moving[dir.Name] = false
+		moving[dir.Symbol] = true
+		wait(0.15)
+		moving[dir.Symbol] = false
 	end)
 end
 
-local Flying = false
-local FlightConnection
-local FlightSpeed = 60
-local FlightAcceleration = 10
-local CurrentVelocity = Vector3.zero
-
-local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local hrp = character:WaitForChild("HumanoidRootPart")
-
 local function startFly()
-	if Flying then return end
-	Flying = true
-	toggle.Text = "🚀 Fly: ON"
+	if flying then return end
+	flying = true
+	toggleButton.Text = "🚀 Fly: ON"
 
-	FlightConnection = RunService.RenderStepped:Connect(function(delta)
-		local BaseVelocity = Vector3.zero
-		local camCF = Camera.CFrame
+	flightConnection = runService.RenderStepped:Connect(function(delta)
+		local baseVelocity = Vector3.zero
+		local camCF = camera.CFrame
 
-		if moving["↑"] then
-			BaseVelocity = BaseVelocity + camCF.LookVector * FlightSpeed
-		end
-		if moving["↓"] then
-			BaseVelocity = BaseVelocity - camCF.LookVector * FlightSpeed
-		end
-		if moving["←"] then
-			BaseVelocity = BaseVelocity - camCF.RightVector * FlightSpeed
-		end
-		if moving["→"] then
-			BaseVelocity = BaseVelocity + camCF.RightVector * FlightSpeed
-		end
-		if moving["⎵"] then
-			BaseVelocity = BaseVelocity + Vector3.yAxis * FlightSpeed
-		end
-		if moving["⇧"] then
-			BaseVelocity = BaseVelocity - Vector3.yAxis * FlightSpeed
-		end
+		if moving["↑"] then baseVelocity += camCF.LookVector * flightSpeed end
+		if moving["↓"] then baseVelocity -= camCF.LookVector * flightSpeed end
+		if moving["←"] then baseVelocity -= camCF.RightVector * flightSpeed end
+		if moving["→"] then baseVelocity += camCF.RightVector * flightSpeed end
+		if moving["⎵"] then baseVelocity += Vector3.yAxis * flightSpeed end
+		if moving["⇧"] then baseVelocity -= Vector3.yAxis * flightSpeed end
 
-		CurrentVelocity = CurrentVelocity:Lerp(BaseVelocity, math.clamp(delta * FlightAcceleration, 0, 1))
-		hrp.Velocity = CurrentVelocity + Vector3.new(0, 2, 0)
+		currentVelocity = currentVelocity:Lerp(baseVelocity, math.clamp(delta * flightAcceleration, 0, 1))
+		hrp.Velocity = currentVelocity + Vector3.new(0, 2, 0)
 	end)
 end
 
 local function stopFly()
-	if not Flying then return end
-	Flying = false
-	toggle.Text = "🚀 Fly: OFF"
-	if FlightConnection then
-		FlightConnection:Disconnect()
-		FlightConnection = nil
+	if not flying then return end
+	flying = false
+	toggleButton.Text = "🚀 Fly: OFF"
+	if flightConnection then
+		flightConnection:Disconnect()
+		flightConnection = nil
 	end
 end
 
-toggle.MouseButton1Click:Connect(function()
-	if Flying then
+toggleButton.MouseButton1Click:Connect(function()
+	if flying then
 		stopFly()
 	else
 		startFly()
 	end
 end)
 
+-- Toggle UI via Orion
+VehicleTab:AddToggle({
+	Name = "Show Mobile Fly UI",
 	Default = false,
 	Callback = function(Value)
-		flyUI.Enabled = Value
-	end    
+		gui.Enabled = Value
+	end
 })
 
+VehicleTab:AddSlider({
+	Name = "Fly Speed",
+	Min = 20,
+	Max = 200,
+	Default = flightSpeed,
+	Color = Color3.fromRGB(255, 255, 255),
+	Increment = 5,
+	ValueName = "Speed",
+	Callback = function(Value)
+		flightSpeed = Value
+	end
+})
+
+OrionLib:Init()
