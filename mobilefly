@@ -112,51 +112,129 @@ VehicleTab:AddSlider({
 	end    
 })
 
--- // Mobile Fly UI \ --
+-- // Mobile Fly UI - Kompakt, Dragbar, Steuerung nur per UI \\ --
 
-local flyUI = Instance.new("ScreenGui")
-flyUI.Name = "MobileFlyUI"
-flyUI.ResetOnSpawn = false
-flyUI.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-flyUI.Enabled = false
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
 
-local buttonSize = UDim2.new(0, 50, 0, 50)
+local gui = Instance.new("ScreenGui")
+gui.Name = "MobileFlyUI"
+gui.Parent = PlayerGui
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 180, 0, 150)
+frame.Position = UDim2.new(0.7, 0, 0.6, 0)
+frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+frame.BackgroundTransparency = 0.2
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+
+local toggle = Instance.new("TextButton")
+toggle.Size = UDim2.new(1, 0, 0, 30)
+toggle.Position = UDim2.new(0, 0, 0, 0)
+toggle.Text = "🚀 Fly: OFF"
+toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggle.Parent = frame
+
 local directions = {
-    {Name="↑", Position=UDim2.new(0.5,-25,0.4,0), Key=Enum.KeyCode.W},
-    {Name="↓", Position=UDim2.new(0.5,-25,0.6,0), Key=Enum.KeyCode.S},
-    {Name="←", Position=UDim2.new(0.4,-25,0.5,-25), Key=Enum.KeyCode.A},
-    {Name="→", Position=UDim2.new(0.6,-25,0.5,-25), Key=Enum.KeyCode.D},
-    {Name="⎵", Position=UDim2.new(0.8,-25,0.5,-25), Key=Enum.KeyCode.Space},
-    {Name="⇧", Position=UDim2.new(0.2,-25,0.5,-25), Key=Enum.KeyCode.LeftShift},
+	{Name = "↑", Vector = Vector3.new(0, 0, -1), Pos = UDim2.new(0.5, -25, 0, 40)},
+	{Name = "↓", Vector = Vector3.new(0, 0, 1), Pos = UDim2.new(0.5, -25, 0, 90)},
+	{Name = "←", Vector = Vector3.new(-1, 0, 0), Pos = UDim2.new(0, 15, 0, 65)},
+	{Name = "→", Vector = Vector3.new(1, 0, 0), Pos = UDim2.new(1, -65, 0, 65)},
+	{Name = "⎵", Vector = Vector3.new(0, 1, 0), Pos = UDim2.new(0, 15, 0, 115)},
+	{Name = "⇧", Vector = Vector3.new(0, -1, 0), Pos = UDim2.new(1, -65, 0, 115)},
 }
 
+local moving = {}
+
 for _, dir in ipairs(directions) do
-    local btn = Instance.new("TextButton")
-    btn.Size = buttonSize
-    btn.Position = dir.Position
-    btn.Text = dir.Name
-    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.BackgroundTransparency = 0.2
-    btn.Parent = flyUI
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0, 50, 0, 30)
+	btn.Position = dir.Pos
+	btn.Text = dir.Name
+	btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Parent = frame
 
-    btn.MouseButton1Down:Connect(function()
-        local input = Instance.new("InputObject")
-        input.UserInputType = Enum.UserInputType.Keyboard
-        input.KeyCode = dir.Key
-        UserInputService.InputBegan:Fire(input, false)
-    end)
-
-    btn.MouseButton1Up:Connect(function()
-        local input = Instance.new("InputObject")
-        input.UserInputType = Enum.UserInputType.Keyboard
-        input.KeyCode = dir.Key
-        UserInputService.InputEnded:Fire(input, false)
-    end)
+	btn.MouseButton1Down:Connect(function()
+		moving[dir.Name] = true
+	end)
+	btn.MouseButton1Up:Connect(function()
+		moving[dir.Name] = false
+	end)
+	btn.TouchTap:Connect(function()
+		moving[dir.Name] = not moving[dir.Name]
+		wait(0.2)
+		moving[dir.Name] = false
+	end)
 end
 
-VehicleTab:AddToggle({
-	Name = "Show Mobile Fly UI",
+local Flying = false
+local FlightConnection
+local FlightSpeed = 60
+local FlightAcceleration = 10
+local CurrentVelocity = Vector3.zero
+
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+local function startFly()
+	if Flying then return end
+	Flying = true
+	toggle.Text = "🚀 Fly: ON"
+
+	FlightConnection = RunService.RenderStepped:Connect(function(delta)
+		local BaseVelocity = Vector3.zero
+		local camCF = Camera.CFrame
+
+		if moving["↑"] then
+			BaseVelocity = BaseVelocity + camCF.LookVector * FlightSpeed
+		end
+		if moving["↓"] then
+			BaseVelocity = BaseVelocity - camCF.LookVector * FlightSpeed
+		end
+		if moving["←"] then
+			BaseVelocity = BaseVelocity - camCF.RightVector * FlightSpeed
+		end
+		if moving["→"] then
+			BaseVelocity = BaseVelocity + camCF.RightVector * FlightSpeed
+		end
+		if moving["⎵"] then
+			BaseVelocity = BaseVelocity + Vector3.yAxis * FlightSpeed
+		end
+		if moving["⇧"] then
+			BaseVelocity = BaseVelocity - Vector3.yAxis * FlightSpeed
+		end
+
+		CurrentVelocity = CurrentVelocity:Lerp(BaseVelocity, math.clamp(delta * FlightAcceleration, 0, 1))
+		hrp.Velocity = CurrentVelocity + Vector3.new(0, 2, 0)
+	end)
+end
+
+local function stopFly()
+	if not Flying then return end
+	Flying = false
+	toggle.Text = "🚀 Fly: OFF"
+	if FlightConnection then
+		FlightConnection:Disconnect()
+		FlightConnection = nil
+	end
+end
+
+toggle.MouseButton1Click:Connect(function()
+	if Flying then
+		stopFly()
+	else
+		startFly()
+	end
+end)
+
 	Default = false,
 	Callback = function(Value)
 		flyUI.Enabled = Value
